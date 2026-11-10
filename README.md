@@ -42,7 +42,9 @@ by default: becomes free), the message language and your notification action:
 
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffttomas%2Fha-electromaps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Felectromaps%2Fconnector_status_notify.yaml)
 
-The notification action gets `message` and `title` variables, for example:
+The notification action gets `message`, `message_html` (the same text in a
+`<pre>` block, monospace in Telegram with `parse_mode: html`) and `title`
+variables, for example:
 
 ```yaml
 action: notify.mobile_app_phone

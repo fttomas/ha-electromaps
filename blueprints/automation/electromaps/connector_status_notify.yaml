@@ -4,10 +4,11 @@ blueprint:
     Notifies when a connector of up to three Electromaps stations changes
     status (by default when one becomes free), and optionally when a station
     has no free connector left. Pick each station as a device; all of its
-    connectors are watched. Your notification action receives `message` (and
-    `title`) as variables, e.g. `message: "{{ message }}"`. Restarts and lost
-    connections to Electromaps do not cause notifications. Requires the
-    Electromaps integration 0.3.0 or later.
+    connectors are watched. Your notification action receives `message`,
+    `message_html` (the same text as a monospace <pre> block, for Telegram
+    with parse_mode: html) and `title`, e.g. `message: "{{ message }}"`.
+    Restarts and lost connections to Electromaps do not cause notifications.
+    Requires the Electromaps integration 0.4.0 or later.
   domain: automation
   source_url: https://github.com/fttomas/ha-electromaps/blob/main/blueprints/automation/electromaps/connector_status_notify.yaml
   input:
@@ -70,8 +71,9 @@ blueprint:
         notify_action:
           name: Notification action
           description: >-
-            For example telegram_bot.send_message or notify.mobile_app_* with
-            `message: "{{ message }}"`.
+            For example notify.mobile_app_* with `message: "{{ message }}"`, or
+            telegram_bot.send_message with `message: "{{ message_html }}"` and
+            `parse_mode: html` for a monospace table.
           selector:
             action: {}
 
@@ -94,67 +96,64 @@ variables:
   notify_on: !input notify_on
   language: !input language
   title: Electromaps
-  # Compact messages. Connector label = first two numbers of its name
-  # ("Cargador 1 - Toma 2" -> К1·Р2 / C1·S2); status = icon + short word.
-  # Every message is a one-line headline plus the whole station, one line per
-  # charger, read from the sensors (the integration fires its events after the
-  # sensors are updated). The station name is the device name, so renaming
-  # the device shortens it.
+  # Table layout, one line per charger: "Кол 1:| 🟠 36м    | 🟢 1м    |".
+  # Charger/socket = first two numbers of the connector name. "Became free"
+  # lists only chargers with a free socket; other messages list all of them.
+  # The connector from the event is shown with the event's own status and
+  # time; the others are read from the sensors (the integration fires events
+  # after the sensors are updated). The station name is added only when more
+  # than one station is watched. `message_html` is the same text in a <pre>
+  # block (monospace in Telegram, use parse_mode: html).
   message: >-
     {%- set W = {
-      'ru': {'available': 'своб', 'occupied': 'зан', 'out_of_service': 'не раб', 'unknown': '?', 'offline': 'нет связи', 'none': 'Свободных нет', 'was': 'было', 'of': 'из', 'charger': 'Колонка', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
-      'en': {'available': 'free', 'occupied': 'busy', 'out_of_service': 'down', 'unknown': '?', 'offline': 'offline', 'none': 'No free connectors', 'was': 'was', 'of': 'of', 'charger': 'Charger', 'c': 'C', 's': 'S', 'h': 'h', 'm': 'm', 'd': 'd'},
-      'es': {'available': 'libre', 'occupied': 'ocup', 'out_of_service': 'averiado', 'unknown': '?', 'offline': 'sin conexión', 'none': 'Sin conectores libres', 'was': 'antes', 'of': 'de', 'charger': 'Cargador', 'c': 'C', 's': 'T', 'h': 'h', 'm': 'm', 'd': 'd'}
+      'ru': {'free_hdr': 'Свободные', 'none': 'Свободных нет', 'occupied': 'Занят', 'out_of_service': 'Не работает', 'unknown': 'Неизвестно', 'col': 'Кол', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
+      'en': {'free_hdr': 'Free', 'none': 'No free connectors', 'occupied': 'Busy', 'out_of_service': 'Down', 'unknown': 'Unknown', 'col': 'Ch', 'c': 'C', 's': 'S', 'h': 'h', 'm': 'm', 'd': 'd'},
+      'es': {'free_hdr': 'Libres', 'none': 'Sin libres', 'occupied': 'Ocupado', 'out_of_service': 'Averiado', 'unknown': 'Desconocido', 'col': 'Carg', 'c': 'C', 's': 'T', 'h': 'h', 'm': 'm', 'd': 'd'}
     }[language] -%}
-    {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🧱', 'unknown': '⚪'} -%}
+    {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '⛔', 'unknown': '⚪'} -%}
     {%- set d = trigger.event.data -%}
+    {%- set many = (stations | select | list | count) > 1 -%}
     {%- set station = (device_attr(d.device_id, 'name_by_user') if d.device_id else none) or d.location_name -%}
     {%- set ents = (device_entities(d.device_id) | select('match', 'sensor\\.') | sort | list) if d.device_id else [] -%}
     {%- set dname = (device_attr(d.device_id, 'name_by_user') or device_attr(d.device_id, 'name')) if d.device_id else '' -%}
-    {%- set ns = namespace(items=[], free=0) -%}
+    {%- set ns = namespace(items=[], minm=none) -%}
     {%- for e in ents -%}
       {%- set own = trigger.id == 'connector' and e == d.entity_id -%}
       {%- set s = d.to_status if own else states(e) -%}
-      {%- set ns.free = ns.free + (1 if s == 'available' else 0) -%}
       {%- set cname = (state_attr(e, 'friendly_name') or e) | replace(dname ~ ' ', '') -%}
       {%- set nums = cname | regex_findall('\\d+') -%}
       {%- set t = ((d.since if own else state_attr(e, 'status_since')) if s in icon else none) -%}
-      {%- set dur = '' -%}
-      {%- if t -%}
-        {%- set m = [((now() - as_datetime(t)).total_seconds() // 60) | int, 0] | max -%}
-        {%- set dur = ' ' ~ ((m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d))) -%}
-      {%- endif -%}
-      {%- set txt = (icon[s] ~ ' ' ~ W[s] ~ dur) if s in icon else ('⚫ ' ~ W.offline) -%}
-      {%- set ns.items = ns.items + [{'col': nums[0] if nums | count >= 2 else '', 'sock': (nums[1] | int) if nums | count >= 2 else 0, 'name': cname, 'txt': txt}] -%}
+      {%- set m = ([((now() - as_datetime(t)).total_seconds() // 60) | int, 0] | max) if t else none -%}
+      {%- set dur = '' if m is none else ((m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d))) -%}
+      {%- if m is not none and s != 'available' -%}{%- set ns.minm = m if ns.minm is none else [ns.minm, m] | min -%}{%- endif -%}
+      {%- set cell = ' ' ~ (icon[s] if s in icon else '⚫') ~ ' ' ~ ('%-6s' | format(dur if s in icon else '—')) -%}
+      {%- set ns.items = ns.items + [{'col': nums[0] if nums | count >= 2 else '', 'sock': (nums[1] | int) if nums | count >= 2 else 0, 'name': cname, 's': s, 'cell': cell}] -%}
     {%- endfor -%}
-    {%- set blk = namespace(t='⚡ ' ~ station ~ ' — ' ~ W.available ~ ' ' ~ ns.free ~ ' ' ~ W.of ~ ' ' ~ ents | count) -%}
+    {%- set only_free = trigger.id == 'connector' and d.to_status == 'available' -%}
+    {%- set rows = namespace(l=[]) -%}
     {%- for col, grp in ns.items | groupby('col') -%}
       {%- if col -%}
-        {%- set blk.t = blk.t ~ '\n' ~ W.charger ~ ' ' ~ col ~ ': ' ~ (grp | sort(attribute='sock') | map(attribute='txt') | join(' · ')) -%}
+        {%- if not only_free or 'available' in (grp | map(attribute='s') | list) -%}
+          {%- set rows.l = rows.l + [W.col ~ ' ' ~ col ~ ':|' ~ (grp | sort(attribute='sock') | map(attribute='cell') | join('|')) ~ '|'] -%}
+        {%- endif -%}
       {%- else -%}
-        {%- for i in grp -%}{%- set blk.t = blk.t ~ '\n' ~ i.name ~ ': ' ~ i.txt -%}{%- endfor -%}
+        {%- for i in grp if (not only_free or i.s == 'available') -%}{%- set rows.l = rows.l + [i.name ~ ':|' ~ i.cell ~ '|'] -%}{%- endfor -%}
       {%- endif -%}
     {%- endfor -%}
+    {%- set where = (' · ' ~ station) if many else '' -%}
     {%- if trigger.id == 'station' -%}
-      {{ '⛔ ' ~ W.none ~ ('\n' ~ blk.t if ents else '') }}
+      {%- set mm = ns.minm -%}
+      {%- set since = '' if (mm is none or mm < 1) else (' (' ~ ((mm ~ W.m) if mm < 60 else (((mm // 60) ~ W.h ~ (mm % 60) ~ W.m) if mm < 1440 else ((mm // 1440) ~ W.d))) ~ ')') -%}
+      {%- set head = '⛔ ' ~ W.none ~ since ~ where -%}
+    {%- elif d.to_status == 'available' -%}
+      {%- set head = '🟢 ' ~ W.free_hdr ~ where -%}
     {%- else -%}
       {%- set nums = d.connector_name | regex_findall('\\d+') -%}
-      {%- set label = (W.c ~ nums[0] ~ '·' ~ W.s ~ nums[1]) if nums | count >= 2 else (('#' ~ nums[0]) if nums else d.connector_name) -%}
-      {%- set word = W.get(d.to_status, d.to_status) -%}
-      {%- set dur = '' -%}
-      {%- if d.from_since -%}
-        {%- set end = as_datetime(d.since) if d.since else now() -%}
-        {%- set m = [((end - as_datetime(d.from_since)).total_seconds() // 60) | int, 0] | max -%}
-        {%- set dur = (m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d)) -%}
-      {%- endif -%}
-      {%- set prev = (W.was ~ ' ' ~ W.get(d.from_status, d.from_status) ~ ' ' ~ dur) if dur else '' -%}
-      {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ word[:1] | upper ~ word[1:] ~ ' ' ~ label -%}
-      {%- if ents -%}
-        {{ head ~ ((' · ' ~ prev) if prev else '') ~ '\n' ~ blk.t }}
-      {%- else -%}
-        {{ head ~ '\n' ~ station ~ ((' · ' ~ prev) if prev else '') }}
-      {%- endif -%}
+      {%- set label = (W.c ~ nums[0] ~ '·' ~ W.s ~ nums[1]) if nums | count >= 2 else d.connector_name -%}
+      {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ W.get(d.to_status, d.to_status) ~ ' ' ~ label ~ where -%}
     {%- endif -%}
+    {{ ([head] + rows.l) | join('\n') }}
+  message_html: "<pre>{{ message | e }}</pre>"
 
 conditions:
   - condition: template
