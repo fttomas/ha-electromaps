@@ -10,6 +10,8 @@ Not affiliated with or endorsed by Electromaps.
 
 - One device per station, one enum sensor per connector:
   `available` / `occupied` / `out_of_service` / `unknown`.
+- A "Free connectors" sensor per station (numeric, with long-term statistics):
+  use it in tile trend graphs, statistics graphs or `numeric_state` triggers.
 - Attributes: `status_since` (when the connector entered its current status,
   as reported by Electromaps), `plug_type`, `power_kw`, `connector_id`.
 - If Electromaps cannot be reached, the sensors become `unavailable`. So

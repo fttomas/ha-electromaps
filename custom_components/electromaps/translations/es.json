@@ -42,6 +42,9 @@
           "out_of_service": "Fuera de servicio",
           "unknown": "Desconocido"
         }
+      },
+      "free_connectors": {
+        "name": "Conectores libres"
       }
     }
   }

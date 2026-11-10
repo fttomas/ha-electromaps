@@ -42,6 +42,9 @@
           "out_of_service": "Не работает",
           "unknown": "Неизвестно"
         }
+      },
+      "free_connectors": {
+        "name": "Свободно"
       }
     }
   }

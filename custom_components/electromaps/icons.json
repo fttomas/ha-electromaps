@@ -9,6 +9,9 @@
           "out_of_service": "mdi:power-plug-off",
           "unknown": "mdi:help-circle-outline"
         }
+      },
+      "free_connectors": {
+        "default": "mdi:ev-station"
       }
     }
   }

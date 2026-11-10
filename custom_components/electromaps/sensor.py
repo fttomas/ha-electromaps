@@ -1,4 +1,5 @@
-"""One enum sensor per connector: available / occupied / out_of_service / unknown.
+"""One enum sensor per connector (available / occupied / out_of_service /
+unknown) and one "free connectors" count per station.
 
 When the API cannot be reached the sensors go unavailable instead of guessing a
 status, so "unknown" in history always means Electromaps itself reported it.
@@ -8,15 +9,29 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MAP_URL, STATUSES
+from .const import DOMAIN, MAP_URL, STATUS_AVAILABLE, STATUSES
 from .coordinator import ElectromapsConfigEntry, ElectromapsCoordinator
-from .models import Connector
+from .models import Connector, Location, count_status
+
+
+def _device_info(location: Location) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, str(location.id))},
+        name=location.name,
+        manufacturer="Electromaps",
+        model="Charging station",
+        configuration_url=MAP_URL.format(location_id=location.id),
+    )
 
 
 async def async_setup_entry(
@@ -25,6 +40,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     coordinator = entry.runtime_data
+    async_add_entities([FreeConnectorsSensor(coordinator)])
     known: set[int] = set()
 
     @callback
@@ -55,13 +71,7 @@ class ConnectorStatusSensor(CoordinatorEntity[ElectromapsCoordinator], SensorEnt
         location = coordinator.data
         self._attr_unique_id = f"{location.id}_{connector_id}"
         self._attr_name = location.connectors[connector_id].name
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, str(location.id))},
-            name=location.name,
-            manufacturer="Electromaps",
-            model="Charging station",
-            configuration_url=MAP_URL.format(location_id=location.id),
-        )
+        self._attr_device_info = _device_info(location)
 
     @property
     def _connector(self) -> Connector | None:
@@ -89,3 +99,29 @@ class ConnectorStatusSensor(CoordinatorEntity[ElectromapsCoordinator], SensorEnt
             "power_kw": connector.power_kw,
             "connector_id": connector.id,
         }
+
+
+class FreeConnectorsSensor(CoordinatorEntity[ElectromapsCoordinator], SensorEntity):
+    """How many connectors of the station are free right now.
+
+    Numeric with a state class, so it gets long-term statistics and works with
+    native cards (tile trend graph, statistics graph, numeric_state triggers).
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "free_connectors"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: ElectromapsCoordinator) -> None:
+        super().__init__(coordinator)
+        location = coordinator.data
+        self._attr_unique_id = f"{location.id}_free_connectors"
+        self._attr_device_info = _device_info(location)
+
+    @property
+    def native_value(self) -> int:
+        return count_status(self.coordinator.data, STATUS_AVAILABLE)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"total": len(self.coordinator.data.connectors)}
