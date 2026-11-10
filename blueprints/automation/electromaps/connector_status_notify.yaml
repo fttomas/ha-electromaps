@@ -96,10 +96,10 @@ variables:
   title: Electromaps
   # Compact messages. Connector label = first two numbers of its name
   # ("Cargador 1 - Toma 2" -> К1·Р2 / C1·S2); status = icon + short word.
-  # "Became free" and "no free connector left" add the whole station, one line
-  # per charger, read from the sensors (the integration fires its events after
-  # the sensors are updated). Other transitions stay two lines. The station
-  # name is the device name, so renaming the device shortens it.
+  # Every message is a one-line headline plus the whole station, one line per
+  # charger, read from the sensors (the integration fires its events after the
+  # sensors are updated). The station name is the device name, so renaming
+  # the device shortens it.
   message: >-
     {%- set W = {
       'ru': {'available': 'своб', 'occupied': 'зан', 'out_of_service': 'не раб', 'unknown': '?', 'offline': 'нет связи', 'none': 'Свободных нет', 'was': 'было', 'of': 'из', 'charger': 'Колонка', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
@@ -148,7 +148,7 @@ variables:
       {%- endif -%}
       {%- set prev = (W.was ~ ' ' ~ W.get(d.from_status, d.from_status) ~ ' ' ~ dur) if dur else '' -%}
       {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ word[:1] | upper ~ word[1:] ~ ' ' ~ label -%}
-      {%- if d.to_status == 'available' and ents -%}
+      {%- if ents -%}
         {{ head ~ ((' · ' ~ prev) if prev else '') ~ '\n' ~ blk.t }}
       {%- else -%}
         {{ head ~ '\n' ~ station ~ ((' · ' ~ prev) if prev else '') }}
