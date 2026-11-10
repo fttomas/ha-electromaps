@@ -96,30 +96,31 @@ variables:
   notify_on: !input notify_on
   language: !input language
   title: Electromaps
-  # Table layout, one line per charger: "Кол 1:| 🟠 36м    | 🟢 1м    |".
-  # Charger/socket = first two numbers of the connector name. "Became free"
-  # lists only chargers with a free socket; other messages list all of them.
+  # Every message: station name, "Свободно: нет / 2/4", then one line per
+  # charger: "Кол 1:| 🟠 36м    | 🟢 1м    |" (charger/socket = first two
+  # numbers of the connector name). "Became free" lists only chargers with a
+  # free socket; other messages list all of them. Only the connector sensors
+  # are listed (they carry connector_id), not the station's free-count sensor.
   # The connector from the event is shown with the event's own status and
   # time; the others are read from the sensors (the integration fires events
-  # after the sensors are updated). The station name is added only when more
-  # than one station is watched. `message_html` is the same text with each
+  # after the sensors are updated). `message_html` is the same text with each
   # line in <code> (monospace in Telegram, use parse_mode: html).
   message: >-
     {%- set W = {
-      'ru': {'free_hdr': 'Свободные', 'none': 'Свободных нет', 'occupied': 'Занят', 'out_of_service': 'Не работает', 'unknown': 'Неизвестно', 'col': 'Кол', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
-      'en': {'free_hdr': 'Free', 'none': 'No free connectors', 'occupied': 'Busy', 'out_of_service': 'Down', 'unknown': 'Unknown', 'col': 'Ch', 'c': 'C', 's': 'S', 'h': 'h', 'm': 'm', 'd': 'd'},
-      'es': {'free_hdr': 'Libres', 'none': 'Sin libres', 'occupied': 'Ocupado', 'out_of_service': 'Averiado', 'unknown': 'Desconocido', 'col': 'Carg', 'c': 'C', 's': 'T', 'h': 'h', 'm': 'm', 'd': 'd'}
+      'ru': {'free': 'Свободно', 'no': 'нет', 'col': 'Кол', 'h': 'ч', 'm': 'м', 'd': 'д'},
+      'en': {'free': 'Free', 'no': 'none', 'col': 'Ch', 'h': 'h', 'm': 'm', 'd': 'd'},
+      'es': {'free': 'Libres', 'no': 'ninguno', 'col': 'Carg', 'h': 'h', 'm': 'm', 'd': 'd'}
     }[language] -%}
     {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '⛔', 'unknown': '⚪'} -%}
     {%- set d = trigger.event.data -%}
-    {%- set many = (stations | select | list | count) > 1 -%}
     {%- set station = (device_attr(d.device_id, 'name_by_user') if d.device_id else none) or d.location_name -%}
     {%- set ents = (device_entities(d.device_id) | select('match', 'sensor\\.') | sort | list) if d.device_id else [] -%}
     {%- set dname = (device_attr(d.device_id, 'name_by_user') or device_attr(d.device_id, 'name')) if d.device_id else '' -%}
-    {%- set ns = namespace(items=[], minm=none) -%}
-    {%- for e in ents -%}
+    {%- set ns = namespace(items=[], minm=none, free=0) -%}
+    {%- for e in ents if state_attr(e, 'connector_id') is not none -%}
       {%- set own = trigger.id == 'connector' and e == d.entity_id -%}
       {%- set s = d.to_status if own else states(e) -%}
+      {%- set ns.free = ns.free + (1 if s == 'available' else 0) -%}
       {%- set cname = (state_attr(e, 'friendly_name') or e) | replace(dname ~ ' ', '') -%}
       {%- set nums = cname | regex_findall('\\d+') -%}
       {%- set t = ((d.since if own else state_attr(e, 'status_since')) if s in icon else none) -%}
@@ -140,19 +141,10 @@ variables:
         {%- for i in grp if (not only_free or i.s == 'available') -%}{%- set rows.l = rows.l + [i.name ~ ':|' ~ i.cell ~ '|'] -%}{%- endfor -%}
       {%- endif -%}
     {%- endfor -%}
-    {%- set where = (' · ' ~ station) if many else '' -%}
-    {%- if trigger.id == 'station' -%}
-      {%- set mm = ns.minm -%}
-      {%- set since = '' if (mm is none or mm < 1) else (' (' ~ ((mm ~ W.m) if mm < 60 else (((mm // 60) ~ W.h ~ (mm % 60) ~ W.m) if mm < 1440 else ((mm // 1440) ~ W.d))) ~ ')') -%}
-      {%- set head = '⛔ ' ~ W.none ~ since ~ where -%}
-    {%- elif d.to_status == 'available' -%}
-      {%- set head = '🟢 ' ~ W.free_hdr ~ where -%}
-    {%- else -%}
-      {%- set nums = d.connector_name | regex_findall('\\d+') -%}
-      {%- set label = (W.c ~ nums[0] ~ '·' ~ W.s ~ nums[1]) if nums | count >= 2 else d.connector_name -%}
-      {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ W.get(d.to_status, d.to_status) ~ ' ' ~ label ~ where -%}
-    {%- endif -%}
-    {{ ([head] + rows.l) | join('\n') }}
+    {%- set mm = ns.minm -%}
+    {%- set since = '' if (mm is none or mm < 1) else (' (' ~ ((mm ~ W.m) if mm < 60 else (((mm // 60) ~ W.h ~ (mm % 60) ~ W.m) if mm < 1440 else ((mm // 1440) ~ W.d))) ~ ')') -%}
+    {%- set free_line = W.free ~ ': ' ~ ((W.no ~ since) if ns.free == 0 else (ns.free ~ '/' ~ ns.items | count)) -%}
+    {{ ([station] + ([free_line] if ns.items else []) + rows.l) | join('\n') }}
   # Each line as inline <code>: monospace in Telegram without the framed
   # "copy" block that <pre> produces.
   message_html: >-
