@@ -107,20 +107,21 @@ variables:
   # line in <code> (monospace in Telegram, use parse_mode: html).
   message: >-
     {%- set W = {
-      'ru': {'free': 'Свободно', 'no': 'нет', 'col': 'Кол', 'h': 'ч', 'm': 'м', 'd': 'д'},
-      'en': {'free': 'Free', 'no': 'none', 'col': 'Ch', 'h': 'h', 'm': 'm', 'd': 'd'},
-      'es': {'free': 'Libres', 'no': 'ninguno', 'col': 'Carg', 'h': 'h', 'm': 'm', 'd': 'd'}
+      'ru': {'free': 'Свободно', 'no': 'нет', 'offline': 'нет связи', 'col': 'Кол', 'h': 'ч', 'm': 'м', 'd': 'д'},
+      'en': {'free': 'Free', 'no': 'none', 'offline': 'no connection', 'col': 'Ch', 'h': 'h', 'm': 'm', 'd': 'd'},
+      'es': {'free': 'Libres', 'no': 'ninguno', 'offline': 'sin conexión', 'col': 'Carg', 'h': 'h', 'm': 'm', 'd': 'd'}
     }[language] -%}
     {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '⛔', 'unknown': '⚪'} -%}
     {%- set d = trigger.event.data -%}
     {%- set station = (device_attr(d.device_id, 'name_by_user') if d.device_id else none) or d.location_name -%}
     {%- set ents = (device_entities(d.device_id) | select('match', 'sensor\\.') | sort | list) if d.device_id else [] -%}
     {%- set dname = (device_attr(d.device_id, 'name_by_user') or device_attr(d.device_id, 'name')) if d.device_id else '' -%}
-    {%- set ns = namespace(items=[], minm=none, free=0) -%}
+    {%- set ns = namespace(items=[], minm=none, free=0, known=0) -%}
     {%- for e in ents if state_attr(e, 'connector_id') is not none -%}
       {%- set own = trigger.id == 'connector' and e == d.entity_id -%}
       {%- set s = d.to_status if own else states(e) -%}
       {%- set ns.free = ns.free + (1 if s == 'available' else 0) -%}
+      {%- set ns.known = ns.known + (1 if s in icon else 0) -%}
       {%- set cname = (state_attr(e, 'friendly_name') or e) | replace(dname ~ ' ', '') -%}
       {%- set nums = cname | regex_findall('\\d+') -%}
       {%- set t = ((d.since if own else state_attr(e, 'status_since')) if s in icon else none) -%}
@@ -143,7 +144,13 @@ variables:
     {%- endfor -%}
     {%- set mm = ns.minm -%}
     {%- set since = '' if (mm is none or mm < 1) else (' (' ~ ((mm ~ W.m) if mm < 60 else (((mm // 60) ~ W.h ~ (mm % 60) ~ W.m) if mm < 1440 else ((mm // 1440) ~ W.d))) ~ ')') -%}
-    {%- set free_line = W.free ~ ': ' ~ ((W.no ~ since) if ns.free == 0 else (ns.free ~ '/' ~ ns.items | count)) -%}
+    {%- if ns.known == 0 -%}
+      {%- set free_line = '⚫ ' ~ W.free ~ ': ' ~ W.offline -%}
+    {%- elif ns.free == 0 -%}
+      {%- set free_line = '⛔ ' ~ W.free ~ ': ' ~ W.no ~ since -%}
+    {%- else -%}
+      {%- set free_line = '🟢 ' ~ W.free ~ ': ' ~ ns.free ~ '/' ~ ns.items | count -%}
+    {%- endif -%}
     {{ ([station] + ([free_line] if ns.items else []) + rows.l) | join('\n') }}
   # Each line as inline <code>: monospace in Telegram without the framed
   # "copy" block that <pre> produces.
