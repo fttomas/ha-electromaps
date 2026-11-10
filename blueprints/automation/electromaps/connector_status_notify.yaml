@@ -94,28 +94,34 @@ variables:
   notify_on: !input notify_on
   language: !input language
   title: Electromaps
+  # Compact, icon-first message. Line 1: new status, station, connector number
+  # (digits of its name, "Charger 1 - Socket 2" -> 1.2). Line 2: the whole
+  # station as one icon per connector, then the previous status and how long
+  # it lasted. The station name is the device name, so renaming the device in
+  # Home Assistant shortens it.
   message: >-
-    {%- set L = {
-      'en': {'available': 'free', 'occupied': 'occupied', 'out_of_service': 'out of service', 'unknown': 'unknown', 'was': 'was', 'h': 'h', 'min': 'min',
-             'none_free': 'no free connectors left', 'n_occupied': 'occupied', 'n_broken': 'out of service'},
-      'ru': {'available': 'свободен', 'occupied': 'занят', 'out_of_service': 'не работает', 'unknown': 'неизвестно', 'was': 'был', 'h': 'ч', 'min': 'мин',
-             'none_free': 'свободных разъёмов не осталось', 'n_occupied': 'занято', 'n_broken': 'не работает'},
-      'es': {'available': 'libre', 'occupied': 'ocupado', 'out_of_service': 'fuera de servicio', 'unknown': 'desconocido', 'was': 'estaba', 'h': 'h', 'min': 'min',
-             'none_free': 'no quedan conectores libres', 'n_occupied': 'ocupados', 'n_broken': 'fuera de servicio'}
-    }[language] -%}
+    {%- set U = {'en': ['h', 'm', 'd'], 'ru': ['ч', 'м', 'д'], 'es': ['h', 'm', 'd']}[language] -%}
+    {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🔴', 'unknown': '⚪'} -%}
     {%- set d = trigger.event.data -%}
+    {%- set station = (device_attr(d.device_id, 'name_by_user') if d.device_id else none) or d.location_name -%}
+    {%- set row = namespace(s='') -%}
     {%- if trigger.id == 'station' -%}
-      {%- set st = (d.statuses or {}).values() | list -%}
-      ⛔ {{ d.location_name }}: {{ L.none_free }} ({{ L.n_occupied }} {{ st | select('eq', 'occupied') | list | count }}, {{ L.n_broken }} {{ st | select('eq', 'out_of_service') | list | count }})
+      {%- for s in (d.statuses or {}).values() -%}{%- set row.s = row.s ~ icon.get(s, '⚪') -%}{%- endfor -%}
+      {{ '⛔ ' ~ station ~ '\n' ~ row.s }}
     {%- else -%}
-      {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🔴'} -%}
+      {%- for e in (device_entities(d.device_id) | select('match', 'sensor\\.') | sort | list if d.device_id else []) -%}
+        {%- set s = d.to_status if e == d.entity_id else states(e) -%}
+        {%- set row.s = row.s ~ icon.get(s, '⚫') -%}
+      {%- endfor -%}
+      {%- set short = d.connector_name | regex_findall('\\d+') | join('.') -%}
       {%- set dur = '' -%}
       {%- if d.from_since -%}
         {%- set end = as_datetime(d.since) if d.since else now() -%}
         {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
-        {%- set dur = ' ' ~ ((m // 60) ~ ' ' ~ L.h ~ ' ' if m >= 60 else '') ~ (m % 60) ~ ' ' ~ L.min -%}
+        {%- set dur = (m ~ U[1]) if m < 60 else (((m // 60) ~ U[0] ~ ' ' ~ (m % 60) ~ U[1]) if m < 1440 else ((m // 1440) ~ U[2])) -%}
       {%- endif -%}
-      {{ icon.get(d.to_status, '⚪') }} {{ d.location_name }} · {{ d.connector_name }}: {{ L.get(d.to_status, d.to_status) }} ({{ L.was }} {{ L.get(d.from_status, d.from_status) }}{{ dur }})
+      {%- set line2 = [row.s, (icon.get(d.from_status, '⚪') ~ ' ' ~ dur) if dur else ''] | select | join(' · ') -%}
+      {{ icon.get(d.to_status, '⚪') ~ ' ' ~ station ~ ' · ' ~ (short or d.connector_name) ~ (('\n' ~ line2) if line2 else '') }}
     {%- endif -%}
 
 conditions:
