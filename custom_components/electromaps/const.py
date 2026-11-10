@@ -7,6 +7,9 @@ DOMAIN: Final = "electromaps"
 API_URL: Final = "https://www.electromaps.com/mapi/v2/locations/{location_id}"
 MAP_URL: Final = "https://map.electromaps.com/en/p/{location_id}"
 
+# Fired once per connector whose status differs from the previous successful poll.
+EVENT_STATUS_CHANGED: Final = "electromaps_connector_status_changed"
+
 CONF_LOCATION_ID: Final = "location_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
 

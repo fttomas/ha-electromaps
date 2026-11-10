@@ -17,6 +17,29 @@ Not affiliated with or endorsed by Electromaps.
   that the request failed.
 - History is kept by the standard Home Assistant recorder.
 
+## Notifications (blueprint)
+
+The integration fires `electromaps_connector_status_changed` once per
+connector whose status differs from the previous successful poll. It does not
+fire after a restart or when the connection to Electromaps is restored. Event
+data: `device_id`, `entity_id`, `location_id`, `location_name`,
+`connector_id`, `connector_name`, `from_status`, `to_status`, `from_since`,
+`since`.
+
+The bundled blueprint lets you pick up to three stations (as devices, so all
+of their connectors are watched), the transitions to report (by default: a
+connector becomes free), the message language and your notification action:
+
+[![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffttomas%2Fha-electromaps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Felectromaps%2Fconnector_status_notify.yaml)
+
+The notification action gets `message` and `title` variables, for example:
+
+```yaml
+action: notify.mobile_app_phone
+data:
+  message: "{{ message }}"
+```
+
 ## Footprint
 
 - One GET request to `https://www.electromaps.com/mapi/v2/locations/<id>` per

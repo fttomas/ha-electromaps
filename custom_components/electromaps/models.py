@@ -82,6 +82,18 @@ def parse_location(data: Any) -> Location:
     return Location(id=location_id, name=name, connectors=connectors)
 
 
+def connector_changes(old: Location, new: Location) -> list[tuple[Connector, Connector]]:
+    """(before, after) for every connector present in both snapshots whose status changed.
+
+    New or vanished connectors are not reported: there is no transition to speak of.
+    """
+    return [
+        (before, after)
+        for cid, after in new.connectors.items()
+        if (before := old.connectors.get(cid)) is not None and before.status != after.status
+    ]
+
+
 # Accepts "123456" or a map URL ending in /p/123456 (any locale, optional query).
 _ID_RE = re.compile(r"^(?:\d+|https?://\S*/p/\d+/?(?:[?#]\S*)?)$")
 _DIGITS_RE = re.compile(r"(\d+)/?(?:[?#]\S*)?$")

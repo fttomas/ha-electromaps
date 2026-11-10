@@ -1,0 +1,111 @@
+blueprint:
+  name: Electromaps — connector status notification
+  description: >-
+    Notifies when a connector of up to three Electromaps stations changes
+    status, by default when one becomes free. Pick each station as a device;
+    all of its connectors are watched. Your notification action receives
+    `message` (and `title`) as variables, e.g. `message: "{{ message }}"`.
+    Restarts and lost connections to Electromaps do not cause notifications.
+  domain: automation
+  source_url: https://github.com/fttomas/ha-electromaps/blob/main/blueprints/automation/electromaps/connector_status_notify.yaml
+  input:
+    stations:
+      name: Stations
+      icon: mdi:ev-station
+      input:
+        station_1:
+          name: Station 1
+          selector:
+            device:
+              filter:
+                - integration: electromaps
+        station_2:
+          name: Station 2 (optional)
+          default: ""
+          selector:
+            device:
+              filter:
+                - integration: electromaps
+        station_3:
+          name: Station 3 (optional)
+          default: ""
+          selector:
+            device:
+              filter:
+                - integration: electromaps
+    notification:
+      name: Notification
+      icon: mdi:bell-outline
+      input:
+        notify_on:
+          name: Notify when a connector becomes
+          default:
+            - available
+          selector:
+            select:
+              multiple: true
+              options:
+                - label: Free
+                  value: available
+                - label: Occupied
+                  value: occupied
+                - label: Out of service
+                  value: out_of_service
+        language:
+          name: Message language
+          default: en
+          selector:
+            select:
+              options:
+                - label: English
+                  value: en
+                - label: Русский
+                  value: ru
+                - label: Español
+                  value: es
+        notify_action:
+          name: Notification action
+          description: >-
+            For example telegram_bot.send_message or notify.mobile_app_* with
+            `message: "{{ message }}"`.
+          selector:
+            action: {}
+
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: electromaps_connector_status_changed
+
+variables:
+  stations:
+    - !input station_1
+    - !input station_2
+    - !input station_3
+  notify_on: !input notify_on
+  language: !input language
+  title: Electromaps
+  message: >-
+    {%- set L = {
+      'en': {'available': 'free', 'occupied': 'occupied', 'out_of_service': 'out of service', 'unknown': 'unknown', 'was': 'was', 'h': 'h', 'min': 'min'},
+      'ru': {'available': 'свободен', 'occupied': 'занят', 'out_of_service': 'не работает', 'unknown': 'неизвестно', 'was': 'был', 'h': 'ч', 'min': 'мин'},
+      'es': {'available': 'libre', 'occupied': 'ocupado', 'out_of_service': 'fuera de servicio', 'unknown': 'desconocido', 'was': 'estaba', 'h': 'h', 'min': 'min'}
+    }[language] -%}
+    {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🔴'} -%}
+    {%- set d = trigger.event.data -%}
+    {%- set dur = '' -%}
+    {%- if d.from_since -%}
+      {%- set end = as_datetime(d.since) if d.since else now() -%}
+      {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
+      {%- set dur = ' ' ~ ((m // 60) ~ ' ' ~ L.h ~ ' ' if m >= 60 else '') ~ (m % 60) ~ ' ' ~ L.min -%}
+    {%- endif -%}
+    {{ icon.get(d.to_status, '⚪') }} {{ d.location_name }} · {{ d.connector_name }}: {{ L.get(d.to_status, d.to_status) }} ({{ L.was }} {{ L.get(d.from_status, d.from_status) }}{{ dur }})
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.event.data.device_id in (stations | select | list)
+         and trigger.event.data.to_status in notify_on }}
+
+actions: !input notify_action

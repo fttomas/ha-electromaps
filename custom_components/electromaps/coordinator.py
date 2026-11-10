@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -15,9 +16,11 @@ from .const import (
     CONF_LOCATION_ID,
     CONF_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    EVENT_STATUS_CHANGED,
     MAX_BACKOFF,
 )
-from .models import Location
+from .models import Location, connector_changes
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,4 +70,39 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
             delay = self._backoff()
             raise UpdateFailed(f"{err}, next try in {delay:.0f}s", retry_after=delay) from err
         self._failures = 0
+        # self.data is the last successful snapshot (kept through outages), so a
+        # recovery or a restart (data is None) never reports a fake transition.
+        if self.data is not None:
+            self._fire_status_events(self.data, location)
         return location
+
+    def _fire_status_events(self, old: Location, new: Location) -> None:
+        changes = connector_changes(old, new)
+        if not changes:
+            return
+        device = dr.async_get(self.hass).async_get_device(
+            identifiers={(DOMAIN, str(new.id))}
+        )
+        entities = er.async_get(self.hass)
+        for before, after in changes:
+            self.hass.bus.async_fire(
+                EVENT_STATUS_CHANGED,
+                {
+                    "device_id": device.id if device else None,
+                    "entity_id": entities.async_get_entity_id(
+                        "sensor", DOMAIN, f"{new.id}_{after.id}"
+                    ),
+                    "location_id": new.id,
+                    "location_name": new.name,
+                    "connector_id": after.id,
+                    "connector_name": after.name,
+                    "from_status": before.status,
+                    "to_status": after.status,
+                    "from_since": _iso(before.status_since),
+                    "since": _iso(after.status_since),
+                },
+            )
+
+
+def _iso(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None

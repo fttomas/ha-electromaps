@@ -62,6 +62,33 @@ class ParseLocationTest(unittest.TestCase):
                 models.parse_location(bad)
 
 
+class ConnectorChangesTest(unittest.TestCase):
+    def test_only_changed_connectors_are_reported(self) -> None:
+        changed = json.loads(json.dumps(FIXTURE))
+        changed["connectors"][0]["status"] = "AVAILABLE"  # 1001: occupied -> available
+        changed["connectors"][2]["status"] = "OUT_OF_SERVICE"  # 1003: unchanged
+        pairs = models.connector_changes(
+            models.parse_location(FIXTURE), models.parse_location(changed)
+        )
+        self.assertEqual(
+            [(b.id, b.status, a.status) for b, a in pairs],
+            [(1001, "occupied", "available")],
+        )
+
+    def test_unchanged_snapshot_reports_nothing(self) -> None:
+        loc = models.parse_location(FIXTURE)
+        self.assertEqual(models.connector_changes(loc, loc), [])
+
+    def test_new_or_vanished_connectors_are_not_transitions(self) -> None:
+        changed = json.loads(json.dumps(FIXTURE))
+        changed["connectors"].pop(0)
+        changed["connectors"].append({"id": 2000, "status": "AVAILABLE"})
+        pairs = models.connector_changes(
+            models.parse_location(FIXTURE), models.parse_location(changed)
+        )
+        self.assertEqual(pairs, [])
+
+
 class ParseInputTest(unittest.TestCase):
     def test_accepted(self) -> None:
         for value in (
