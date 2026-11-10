@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Electromaps charging station",
+        "data": {
+          "location": "Station ID or map URL"
+        },
+        "data_description": {
+          "location": "For example 123456 or https://map.electromaps.com/en/p/123456"
+        }
+      }
+    },
+    "error": {
+      "invalid_location": "Could not find a station ID in the input.",
+      "not_found": "Electromaps does not know this station.",
+      "cannot_connect": "Could not reach Electromaps. Try again later."
+    },
+    "abort": {
+      "already_configured": "This station is already added."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling",
+        "data": {
+          "scan_interval": "Poll interval"
+        },
+        "data_description": {
+          "scan_interval": "Seconds between requests. One request covers all connectors of the station."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connector_status": {
+        "state": {
+          "available": "Available",
+          "occupied": "Occupied",
+          "out_of_service": "Out of service",
+          "unknown": "Unknown"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Añadir punto de recarga de Electromaps",
+        "data": {
+          "location": "ID del punto o enlace del mapa"
+        },
+        "data_description": {
+          "location": "Por ejemplo, 123456 o https://map.electromaps.com/es/p/123456"
+        }
+      }
+    },
+    "error": {
+      "invalid_location": "No se ha encontrado un ID de punto en el texto.",
+      "not_found": "Electromaps no conoce este punto.",
+      "cannot_connect": "No se puede conectar con Electromaps. Inténtalo más tarde."
+    },
+    "abort": {
+      "already_configured": "Este punto ya está añadido."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Consulta",
+        "data": {
+          "scan_interval": "Intervalo de consulta"
+        },
+        "data_description": {
+          "scan_interval": "Segundos entre peticiones. Una petición cubre todos los conectores del punto."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connector_status": {
+        "state": {
+          "available": "Libre",
+          "occupied": "Ocupado",
+          "out_of_service": "Fuera de servicio",
+          "unknown": "Desconocido"
+        }
+      }
+    }
+  }
+}

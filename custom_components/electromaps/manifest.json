@@ -1,0 +1,13 @@
+{
+  "domain": "electromaps",
+  "name": "Electromaps",
+  "codeowners": ["@fttomas"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/fttomas/ha-electromaps",
+  "integration_type": "device",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/fttomas/ha-electromaps/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Добавить зарядную станцию Electromaps",
+        "data": {
+          "location": "ID станции или ссылка на карту"
+        },
+        "data_description": {
+          "location": "Например, 123456 или https://map.electromaps.com/en/p/123456"
+        }
+      }
+    },
+    "error": {
+      "invalid_location": "Не удалось найти ID станции во введённом тексте.",
+      "not_found": "Electromaps не знает такую станцию.",
+      "cannot_connect": "Electromaps не отвечает. Попробуйте позже."
+    },
+    "abort": {
+      "already_configured": "Эта станция уже добавлена."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Опрос",
+        "data": {
+          "scan_interval": "Интервал опроса"
+        },
+        "data_description": {
+          "scan_interval": "Секунды между запросами. Один запрос покрывает все разъёмы станции."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "connector_status": {
+        "state": {
+          "available": "Свободен",
+          "occupied": "Занят",
+          "out_of_service": "Не работает",
+          "unknown": "Неизвестно"
+        }
+      }
+    }
+  }
+}

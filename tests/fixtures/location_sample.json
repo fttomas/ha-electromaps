@@ -1,0 +1,84 @@
+{
+  "id": 123456,
+  "name": "Sample Station",
+  "url": "https://map.electromaps.com/en/p/123456",
+  "latitude": 0.0,
+  "longitude": 0.0,
+  "rating": 4.2,
+  "count_ratings": 10,
+  "count_comments": 5,
+  "count_images": 1,
+  "type": "ON_STREET",
+  "online_status": "AVAILABLE",
+  "offline_status": "WORKING",
+  "realtime": true,
+  "favorite": false,
+  "updated_at": "2026-01-01T00:00:00+0000",
+  "address": {
+    "address": "Example Street 1",
+    "city": "Example City",
+    "country_code": "XX"
+  },
+  "advertisement": {
+    "ad_image_url": "https://example.com/banner.png",
+    "ad_link": "https://example.com/"
+  },
+  "connectors": [
+    {
+      "id": 1001,
+      "visualRef": "Charger 1 - Socket 1",
+      "type": "IEC_62196_T2",
+      "status": "OCCUPIED",
+      "realtime": true,
+      "voltage": 400,
+      "amperage": 16,
+      "kw": 11,
+      "format": "SOCKET",
+      "cost": "FREE",
+      "status_updated_at": "2026-01-01T09:30:00+0000",
+      "reservable": false
+    },
+    {
+      "id": 1002,
+      "visualRef": "Charger 1 - Socket 2",
+      "type": "IEC_62196_T2",
+      "status": "AVAILABLE",
+      "realtime": true,
+      "voltage": 400,
+      "amperage": 16,
+      "kw": 11,
+      "format": "SOCKET",
+      "cost": "FREE",
+      "status_updated_at": "2026-01-01T10:15:00+0000",
+      "reservable": false
+    },
+    {
+      "id": 1003,
+      "visualRef": "Charger 2 - Socket 1",
+      "type": "IEC_62196_T2",
+      "status": "OUT_OF_SERVICE",
+      "realtime": true,
+      "voltage": 400,
+      "amperage": 16,
+      "kw": 11,
+      "format": "SOCKET",
+      "cost": "FREE",
+      "status_updated_at": "2026-01-01T08:00:00+0000",
+      "reservable": false
+    },
+    {
+      "id": 1004,
+      "visualRef": "Charger 2 - Socket 2",
+      "type": "IEC_62196_T2",
+      "status": "UNKNOWN",
+      "realtime": false,
+      "voltage": 400,
+      "amperage": 16,
+      "kw": 11,
+      "format": "SOCKET",
+      "cost": "FREE",
+      "status_updated_at": null,
+      "reservable": false
+    }
+  ]
+}
