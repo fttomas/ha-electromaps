@@ -96,7 +96,7 @@ variables:
   notify_on: !input notify_on
   language: !input language
   title: Electromaps
-  # Every message: station name, "Свободно: нет / 2/4", then one line per
+  # Every message: "⚡ station", "🟢 Свободно: 2/4 | ⛔ нет | ⚫ нет связи", then one line per
   # charger: "Кол 1:| 🟠 36м    | 🟢 1м    |" (charger/socket = first two
   # numbers of the connector name). "Became free" lists only chargers with a
   # free socket; other messages list all of them. Only the connector sensors
@@ -151,7 +151,7 @@ variables:
     {%- else -%}
       {%- set free_line = '🟢 ' ~ W.free ~ ': ' ~ ns.free ~ '/' ~ ns.items | count -%}
     {%- endif -%}
-    {{ ([station] + ([free_line] if ns.items else []) + rows.l) | join('\n') }}
+    {{ (['⚡ ' ~ station] + ([free_line] if ns.items else []) + rows.l) | join('\n') }}
   # Each line as inline <code>: monospace in Telegram without the framed
   # "copy" block that <pre> produces.
   message_html: >-
