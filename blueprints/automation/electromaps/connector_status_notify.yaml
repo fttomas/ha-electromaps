@@ -121,7 +121,7 @@ variables:
       {%- set t = ((d.since if own else state_attr(e, 'status_since')) if s in icon else none) -%}
       {%- set dur = '' -%}
       {%- if t -%}
-        {%- set m = ((now() - as_datetime(t)).total_seconds() // 60) | int -%}
+        {%- set m = [((now() - as_datetime(t)).total_seconds() // 60) | int, 0] | max -%}
         {%- set dur = ' ' ~ ((m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d))) -%}
       {%- endif -%}
       {%- set txt = (icon[s] ~ ' ' ~ W[s] ~ dur) if s in icon else ('⚫ ' ~ W.offline) -%}
@@ -144,7 +144,7 @@ variables:
       {%- set dur = '' -%}
       {%- if d.from_since -%}
         {%- set end = as_datetime(d.since) if d.since else now() -%}
-        {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
+        {%- set m = [((end - as_datetime(d.from_since)).total_seconds() // 60) | int, 0] | max -%}
         {%- set dur = (m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d)) -%}
       {%- endif -%}
       {%- set prev = (W.was ~ ' ' ~ W.get(d.from_status, d.from_status) ~ ' ' ~ dur) if dur else '' -%}
