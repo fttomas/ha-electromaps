@@ -26,9 +26,16 @@ data: `device_id`, `entity_id`, `location_id`, `location_name`,
 `connector_id`, `connector_name`, `from_status`, `to_status`, `from_since`,
 `since`.
 
+Once per poll, for a station where at least one connector changed, it also
+fires `electromaps_station_status_changed` with `device_id`, `location_id`,
+`location_name`, `free`, `free_before`, `total` and `statuses`
+(connector name → status). Use it to detect "no free connector left" without
+reading entity states.
+
 The bundled blueprint lets you pick up to three stations (as devices, so all
-of their connectors are watched), the transitions to report (by default: a
-connector becomes free), the message language and your notification action:
+of their connectors are watched), what to report (a connector becomes free,
+occupied or out of service, and/or no free connector is left at a station;
+by default: becomes free), the message language and your notification action:
 
 [![Import blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Ffttomas%2Fha-electromaps%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Felectromaps%2Fconnector_status_notify.yaml)
 

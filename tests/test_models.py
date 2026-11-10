@@ -75,6 +75,14 @@ class ConnectorChangesTest(unittest.TestCase):
             [(1001, "occupied", "available")],
         )
 
+    def test_count_status(self) -> None:
+        loc = models.parse_location(FIXTURE)
+        self.assertEqual(models.count_status(loc, "available"), 1)
+        self.assertEqual(models.count_status(loc, "occupied"), 1)
+        taken = json.loads(json.dumps(FIXTURE))
+        taken["connectors"][1]["status"] = "OCCUPIED"  # the only free one
+        self.assertEqual(models.count_status(models.parse_location(taken), "available"), 0)
+
     def test_unchanged_snapshot_reports_nothing(self) -> None:
         loc = models.parse_location(FIXTURE)
         self.assertEqual(models.connector_changes(loc, loc), [])

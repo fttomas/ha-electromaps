@@ -17,10 +17,12 @@ from .const import (
     CONF_SCAN_INTERVAL,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    EVENT_STATION_CHANGED,
     EVENT_STATUS_CHANGED,
     MAX_BACKOFF,
+    STATUS_AVAILABLE,
 )
-from .models import Location, connector_changes
+from .models import Location, connector_changes, count_status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,6 +104,18 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
                     "since": _iso(after.status_since),
                 },
             )
+        self.hass.bus.async_fire(
+            EVENT_STATION_CHANGED,
+            {
+                "device_id": device.id if device else None,
+                "location_id": new.id,
+                "location_name": new.name,
+                "free": count_status(new, STATUS_AVAILABLE),
+                "free_before": count_status(old, STATUS_AVAILABLE),
+                "total": len(new.connectors),
+                "statuses": {c.name: c.status for c in new.connectors.values()},
+            },
+        )
 
 
 def _iso(value: datetime | None) -> str | None:

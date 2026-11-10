@@ -82,6 +82,11 @@ def parse_location(data: Any) -> Location:
     return Location(id=location_id, name=name, connectors=connectors)
 
 
+def count_status(location: Location, status: str) -> int:
+    """Number of connectors of the location currently in the given status."""
+    return sum(1 for c in location.connectors.values() if c.status == status)
+
+
 def connector_changes(old: Location, new: Location) -> list[tuple[Connector, Connector]]:
     """(before, after) for every connector present in both snapshots whose status changed.
 

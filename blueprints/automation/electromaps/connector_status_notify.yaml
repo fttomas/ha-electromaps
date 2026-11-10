@@ -2,10 +2,12 @@ blueprint:
   name: Electromaps — connector status notification
   description: >-
     Notifies when a connector of up to three Electromaps stations changes
-    status, by default when one becomes free. Pick each station as a device;
-    all of its connectors are watched. Your notification action receives
-    `message` (and `title`) as variables, e.g. `message: "{{ message }}"`.
-    Restarts and lost connections to Electromaps do not cause notifications.
+    status (by default when one becomes free), and optionally when a station
+    has no free connector left. Pick each station as a device; all of its
+    connectors are watched. Your notification action receives `message` (and
+    `title`) as variables, e.g. `message: "{{ message }}"`. Restarts and lost
+    connections to Electromaps do not cause notifications. Requires the
+    Electromaps integration 0.3.0 or later.
   domain: automation
   source_url: https://github.com/fttomas/ha-electromaps/blob/main/blueprints/automation/electromaps/connector_status_notify.yaml
   input:
@@ -38,19 +40,21 @@ blueprint:
       icon: mdi:bell-outline
       input:
         notify_on:
-          name: Notify when a connector becomes
+          name: Notify when
           default:
             - available
           selector:
             select:
               multiple: true
               options:
-                - label: Free
+                - label: A connector becomes free
                   value: available
-                - label: Occupied
+                - label: A connector becomes occupied
                   value: occupied
-                - label: Out of service
+                - label: A connector goes out of service
                   value: out_of_service
+                - label: No free connector is left at a station
+                  value: none_free
         language:
           name: Message language
           default: en
@@ -77,6 +81,10 @@ max: 10
 triggers:
   - trigger: event
     event_type: electromaps_connector_status_changed
+    id: connector
+  - trigger: event
+    event_type: electromaps_station_status_changed
+    id: station
 
 variables:
   stations:
@@ -88,24 +96,37 @@ variables:
   title: Electromaps
   message: >-
     {%- set L = {
-      'en': {'available': 'free', 'occupied': 'occupied', 'out_of_service': 'out of service', 'unknown': 'unknown', 'was': 'was', 'h': 'h', 'min': 'min'},
-      'ru': {'available': 'свободен', 'occupied': 'занят', 'out_of_service': 'не работает', 'unknown': 'неизвестно', 'was': 'был', 'h': 'ч', 'min': 'мин'},
-      'es': {'available': 'libre', 'occupied': 'ocupado', 'out_of_service': 'fuera de servicio', 'unknown': 'desconocido', 'was': 'estaba', 'h': 'h', 'min': 'min'}
+      'en': {'available': 'free', 'occupied': 'occupied', 'out_of_service': 'out of service', 'unknown': 'unknown', 'was': 'was', 'h': 'h', 'min': 'min',
+             'none_free': 'no free connectors left', 'n_occupied': 'occupied', 'n_broken': 'out of service'},
+      'ru': {'available': 'свободен', 'occupied': 'занят', 'out_of_service': 'не работает', 'unknown': 'неизвестно', 'was': 'был', 'h': 'ч', 'min': 'мин',
+             'none_free': 'свободных разъёмов не осталось', 'n_occupied': 'занято', 'n_broken': 'не работает'},
+      'es': {'available': 'libre', 'occupied': 'ocupado', 'out_of_service': 'fuera de servicio', 'unknown': 'desconocido', 'was': 'estaba', 'h': 'h', 'min': 'min',
+             'none_free': 'no quedan conectores libres', 'n_occupied': 'ocupados', 'n_broken': 'fuera de servicio'}
     }[language] -%}
-    {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🔴'} -%}
     {%- set d = trigger.event.data -%}
-    {%- set dur = '' -%}
-    {%- if d.from_since -%}
-      {%- set end = as_datetime(d.since) if d.since else now() -%}
-      {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
-      {%- set dur = ' ' ~ ((m // 60) ~ ' ' ~ L.h ~ ' ' if m >= 60 else '') ~ (m % 60) ~ ' ' ~ L.min -%}
+    {%- if trigger.id == 'station' -%}
+      {%- set st = (d.statuses or {}).values() | list -%}
+      ⛔ {{ d.location_name }}: {{ L.none_free }} ({{ L.n_occupied }} {{ st | select('eq', 'occupied') | list | count }}, {{ L.n_broken }} {{ st | select('eq', 'out_of_service') | list | count }})
+    {%- else -%}
+      {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🔴'} -%}
+      {%- set dur = '' -%}
+      {%- if d.from_since -%}
+        {%- set end = as_datetime(d.since) if d.since else now() -%}
+        {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
+        {%- set dur = ' ' ~ ((m // 60) ~ ' ' ~ L.h ~ ' ' if m >= 60 else '') ~ (m % 60) ~ ' ' ~ L.min -%}
+      {%- endif -%}
+      {{ icon.get(d.to_status, '⚪') }} {{ d.location_name }} · {{ d.connector_name }}: {{ L.get(d.to_status, d.to_status) }} ({{ L.was }} {{ L.get(d.from_status, d.from_status) }}{{ dur }})
     {%- endif -%}
-    {{ icon.get(d.to_status, '⚪') }} {{ d.location_name }} · {{ d.connector_name }}: {{ L.get(d.to_status, d.to_status) }} ({{ L.was }} {{ L.get(d.from_status, d.from_status) }}{{ dur }})
 
 conditions:
   - condition: template
     value_template: >-
-      {{ trigger.event.data.device_id in (stations | select | list)
-         and trigger.event.data.to_status in notify_on }}
+      {%- set d = trigger.event.data -%}
+      {%- set watched = d.device_id in (stations | select | list) -%}
+      {%- if trigger.id == 'station' -%}
+        {{ watched and 'none_free' in notify_on and d.free == 0 and d.free_before > 0 }}
+      {%- else -%}
+        {{ watched and d.to_status in notify_on }}
+      {%- endif -%}
 
 actions: !input notify_action

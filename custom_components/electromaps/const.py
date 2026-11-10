@@ -9,6 +9,9 @@ MAP_URL: Final = "https://map.electromaps.com/en/p/{location_id}"
 
 # Fired once per connector whose status differs from the previous successful poll.
 EVENT_STATUS_CHANGED: Final = "electromaps_connector_status_changed"
+# Fired once per poll for a station when at least one of its connectors changed,
+# with free-connector counts before and after, so "none left" needs no state reads.
+EVENT_STATION_CHANGED: Final = "electromaps_station_status_changed"
 
 CONF_LOCATION_ID: Final = "location_id"
 CONF_SCAN_INTERVAL: Final = "scan_interval"
