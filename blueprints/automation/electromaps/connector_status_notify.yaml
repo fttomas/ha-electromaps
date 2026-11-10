@@ -94,22 +94,48 @@ variables:
   notify_on: !input notify_on
   language: !input language
   title: Electromaps
-  # Compact message, two short lines. Connector label from the first two
-  # numbers of its name ("Cargador 1 - Toma 2" -> К1·Р2 / C1·S2), status as an
-  # icon plus a short word. The station name is the device name, so renaming
-  # the device in Home Assistant shortens it.
+  # Compact messages. Connector label = first two numbers of its name
+  # ("Cargador 1 - Toma 2" -> К1·Р2 / C1·S2); status = icon + short word.
+  # "Became free" and "no free connector left" add the whole station, one line
+  # per charger, read from the sensors (the integration fires its events after
+  # the sensors are updated). Other transitions stay two lines. The station
+  # name is the device name, so renaming the device shortens it.
   message: >-
     {%- set W = {
-      'ru': {'available': 'своб', 'occupied': 'зан', 'out_of_service': 'не раб', 'unknown': '?', 'none': 'Свободных нет', 'was': 'было', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
-      'en': {'available': 'free', 'occupied': 'busy', 'out_of_service': 'down', 'unknown': '?', 'none': 'No free connectors', 'was': 'was', 'c': 'C', 's': 'S', 'h': 'h', 'm': 'm', 'd': 'd'},
-      'es': {'available': 'libre', 'occupied': 'ocup', 'out_of_service': 'averiado', 'unknown': '?', 'none': 'Sin conectores libres', 'was': 'antes', 'c': 'C', 's': 'T', 'h': 'h', 'm': 'm', 'd': 'd'}
+      'ru': {'available': 'своб', 'occupied': 'зан', 'out_of_service': 'не раб', 'unknown': '?', 'offline': 'нет связи', 'none': 'Свободных нет', 'was': 'было', 'of': 'из', 'charger': 'Колонка', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
+      'en': {'available': 'free', 'occupied': 'busy', 'out_of_service': 'down', 'unknown': '?', 'offline': 'offline', 'none': 'No free connectors', 'was': 'was', 'of': 'of', 'charger': 'Charger', 'c': 'C', 's': 'S', 'h': 'h', 'm': 'm', 'd': 'd'},
+      'es': {'available': 'libre', 'occupied': 'ocup', 'out_of_service': 'averiado', 'unknown': '?', 'offline': 'sin conexión', 'none': 'Sin conectores libres', 'was': 'antes', 'of': 'de', 'charger': 'Cargador', 'c': 'C', 's': 'T', 'h': 'h', 'm': 'm', 'd': 'd'}
     }[language] -%}
     {%- set icon = {'available': '🟢', 'occupied': '🟠', 'out_of_service': '🧱', 'unknown': '⚪'} -%}
     {%- set d = trigger.event.data -%}
     {%- set station = (device_attr(d.device_id, 'name_by_user') if d.device_id else none) or d.location_name -%}
+    {%- set ents = (device_entities(d.device_id) | select('match', 'sensor\\.') | sort | list) if d.device_id else [] -%}
+    {%- set dname = (device_attr(d.device_id, 'name_by_user') or device_attr(d.device_id, 'name')) if d.device_id else '' -%}
+    {%- set ns = namespace(items=[], free=0) -%}
+    {%- for e in ents -%}
+      {%- set s = states(e) -%}
+      {%- set ns.free = ns.free + (1 if s == 'available' else 0) -%}
+      {%- set cname = (state_attr(e, 'friendly_name') or e) | replace(dname ~ ' ', '') -%}
+      {%- set nums = cname | regex_findall('\\d+') -%}
+      {%- set t = state_attr(e, 'status_since') if s in icon else none -%}
+      {%- set dur = '' -%}
+      {%- if t -%}
+        {%- set m = ((now() - as_datetime(t)).total_seconds() // 60) | int -%}
+        {%- set dur = ' ' ~ ((m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d))) -%}
+      {%- endif -%}
+      {%- set txt = (icon[s] ~ ' ' ~ W[s] ~ dur) if s in icon else ('⚫ ' ~ W.offline) -%}
+      {%- set ns.items = ns.items + [{'col': nums[0] if nums | count >= 2 else '', 'sock': (nums[1] | int) if nums | count >= 2 else 0, 'name': cname, 'txt': txt}] -%}
+    {%- endfor -%}
+    {%- set blk = namespace(t='⚡ ' ~ station ~ ' — ' ~ W.available ~ ' ' ~ ns.free ~ ' ' ~ W.of ~ ' ' ~ ents | count) -%}
+    {%- for col, grp in ns.items | groupby('col') -%}
+      {%- if col -%}
+        {%- set blk.t = blk.t ~ '\n' ~ W.charger ~ ' ' ~ col ~ ': ' ~ (grp | sort(attribute='sock') | map(attribute='txt') | join(' · ')) -%}
+      {%- else -%}
+        {%- for i in grp -%}{%- set blk.t = blk.t ~ '\n' ~ i.name ~ ': ' ~ i.txt -%}{%- endfor -%}
+      {%- endif -%}
+    {%- endfor -%}
     {%- if trigger.id == 'station' -%}
-      {%- set st = (d.statuses or {}).values() | list -%}
-      {{ '⛔ ' ~ W.none ~ '\n' ~ station ~ ' · ' ~ W.occupied ~ ' ' ~ (st | select('eq', 'occupied') | list | count) ~ ', ' ~ W.out_of_service ~ ' ' ~ (st | select('eq', 'out_of_service') | list | count) }}
+      {{ '⛔ ' ~ W.none ~ ('\n' ~ blk.t if ents else '') }}
     {%- else -%}
       {%- set nums = d.connector_name | regex_findall('\\d+') -%}
       {%- set label = (W.c ~ nums[0] ~ '·' ~ W.s ~ nums[1]) if nums | count >= 2 else (('#' ~ nums[0]) if nums else d.connector_name) -%}
@@ -120,8 +146,13 @@ variables:
         {%- set m = ((end - as_datetime(d.from_since)).total_seconds() // 60) | int -%}
         {%- set dur = (m ~ W.m) if m < 60 else (((m // 60) ~ W.h ~ ' ' ~ (m % 60) ~ W.m) if m < 1440 else ((m // 1440) ~ W.d)) -%}
       {%- endif -%}
-      {%- set prev = (' · ' ~ W.was ~ ' ' ~ W.get(d.from_status, d.from_status) ~ ' ' ~ dur) if dur else '' -%}
-      {{ icon.get(d.to_status, '⚪') ~ ' ' ~ word[:1] | upper ~ word[1:] ~ ' ' ~ label ~ '\n' ~ station ~ prev }}
+      {%- set prev = (W.was ~ ' ' ~ W.get(d.from_status, d.from_status) ~ ' ' ~ dur) if dur else '' -%}
+      {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ word[:1] | upper ~ word[1:] ~ ' ' ~ label -%}
+      {%- if d.to_status == 'available' and ents -%}
+        {{ head ~ ((' · ' ~ prev) if prev else '') ~ '\n' ~ blk.t }}
+      {%- else -%}
+        {{ head ~ '\n' ~ station ~ ((' · ' ~ prev) if prev else '') }}
+      {%- endif -%}
     {%- endif -%}
 
 conditions:

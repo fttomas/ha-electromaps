@@ -26,6 +26,9 @@ data: `device_id`, `entity_id`, `location_id`, `location_name`,
 `connector_id`, `connector_name`, `from_status`, `to_status`, `from_since`,
 `since`.
 
+Events are fired after the sensors have written their new states, so an
+automation handling one can read up-to-date sensor states.
+
 Once per poll, for a station where at least one connector changed, it also
 fires `electromaps_station_status_changed` with `device_id`, `location_id`,
 `location_name`, `free`, `free_before`, `total` and `statuses`

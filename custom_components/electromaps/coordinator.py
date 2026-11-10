@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -51,6 +52,10 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
         )
         self._session = async_get_clientsession(hass)
         self._failures = 0
+        # Events computed during a poll, fired only after the entities have
+        # written their new states (see async_update_listeners), so automations
+        # that read sensor states while handling an event see the new values.
+        self._pending_events: list[tuple[str, dict[str, Any]]] = []
 
     def _backoff(self, hint: float | None = None) -> float:
         """Seconds until the next try: doubles per consecutive failure, capped."""
@@ -60,7 +65,15 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
             delay = max(delay, min(hint, MAX_BACKOFF))
         return delay
 
+    @callback
+    def async_update_listeners(self) -> None:
+        super().async_update_listeners()
+        pending, self._pending_events = self._pending_events, []
+        for event_type, data in pending:
+            self.hass.bus.async_fire(event_type, data)
+
     async def _async_update_data(self) -> Location:
+        self._pending_events = []
         try:
             location = await fetch_location(self._session, self.location_id)
         except LocationNotFound as err:
@@ -87,7 +100,7 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
         )
         entities = er.async_get(self.hass)
         for before, after in changes:
-            self.hass.bus.async_fire(
+            self._pending_events.append((
                 EVENT_STATUS_CHANGED,
                 {
                     "device_id": device.id if device else None,
@@ -103,8 +116,8 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
                     "from_since": _iso(before.status_since),
                     "since": _iso(after.status_since),
                 },
-            )
-        self.hass.bus.async_fire(
+            ))
+        self._pending_events.append((
             EVENT_STATION_CHANGED,
             {
                 "device_id": device.id if device else None,
@@ -115,7 +128,7 @@ class ElectromapsCoordinator(DataUpdateCoordinator[Location]):
                 "total": len(new.connectors),
                 "statuses": {c.name: c.status for c in new.connectors.values()},
             },
-        )
+        ))
 
 
 def _iso(value: datetime | None) -> str | None:
