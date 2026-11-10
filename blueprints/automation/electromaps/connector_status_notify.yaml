@@ -113,11 +113,12 @@ variables:
     {%- set dname = (device_attr(d.device_id, 'name_by_user') or device_attr(d.device_id, 'name')) if d.device_id else '' -%}
     {%- set ns = namespace(items=[], free=0) -%}
     {%- for e in ents -%}
-      {%- set s = states(e) -%}
+      {%- set own = trigger.id == 'connector' and e == d.entity_id -%}
+      {%- set s = d.to_status if own else states(e) -%}
       {%- set ns.free = ns.free + (1 if s == 'available' else 0) -%}
       {%- set cname = (state_attr(e, 'friendly_name') or e) | replace(dname ~ ' ', '') -%}
       {%- set nums = cname | regex_findall('\\d+') -%}
-      {%- set t = state_attr(e, 'status_since') if s in icon else none -%}
+      {%- set t = ((d.since if own else state_attr(e, 'status_since')) if s in icon else none) -%}
       {%- set dur = '' -%}
       {%- if t -%}
         {%- set m = ((now() - as_datetime(t)).total_seconds() // 60) | int -%}
