@@ -5,7 +5,7 @@ blueprint:
     status (by default when one becomes free), and optionally when a station
     has no free connector left. Pick each station as a device; all of its
     connectors are watched. Your notification action receives `message`,
-    `message_html` (the same text as a monospace <pre> block, for Telegram
+    `message_html` (the same text, each line as monospace <code>, for Telegram
     with parse_mode: html) and `title`, e.g. `message: "{{ message }}"`.
     Restarts and lost connections to Electromaps do not cause notifications.
     Requires the Electromaps integration 0.4.0 or later.
@@ -102,8 +102,8 @@ variables:
   # The connector from the event is shown with the event's own status and
   # time; the others are read from the sensors (the integration fires events
   # after the sensors are updated). The station name is added only when more
-  # than one station is watched. `message_html` is the same text in a <pre>
-  # block (monospace in Telegram, use parse_mode: html).
+  # than one station is watched. `message_html` is the same text with each
+  # line in <code> (monospace in Telegram, use parse_mode: html).
   message: >-
     {%- set W = {
       'ru': {'free_hdr': 'Свободные', 'none': 'Свободных нет', 'occupied': 'Занят', 'out_of_service': 'Не работает', 'unknown': 'Неизвестно', 'col': 'Кол', 'c': 'К', 's': 'Р', 'h': 'ч', 'm': 'м', 'd': 'д'},
@@ -153,7 +153,10 @@ variables:
       {%- set head = icon.get(d.to_status, '⚪') ~ ' ' ~ W.get(d.to_status, d.to_status) ~ ' ' ~ label ~ where -%}
     {%- endif -%}
     {{ ([head] + rows.l) | join('\n') }}
-  message_html: "<pre>{{ message | e }}</pre>"
+  # Each line as inline <code>: monospace in Telegram without the framed
+  # "copy" block that <pre> produces.
+  message_html: >-
+    {%- for l in message.split('\n') -%}<code>{{ l | e }}</code>{{ '\n' if not loop.last else '' }}{%- endfor -%}
 
 conditions:
   - condition: template
